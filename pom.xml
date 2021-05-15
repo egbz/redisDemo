@@ -10,6 +10,7 @@
     <version>1.0-SNAPSHOT</version>
     <modules>
         <module>boot_redis01</module>
+        <module>boot-redis02</module>
     </modules>
 
     <properties>
