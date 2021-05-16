@@ -25,26 +25,30 @@ public class GoodsController {
     @GetMapping("/buyGoods")
     public String buyGoods() {
         String value = UUID.randomUUID() + Thread.currentThread().getName();
-        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(REDIS_LOCK, value); //setNX
+        try {
+            // lock
+            Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(REDIS_LOCK, value); //setNX
+            if (flag) {
+                // get key     看库存数量够不够
+                String res = stringRedisTemplate.opsForValue().get("goods:001");
+                int goodsNumber = res == null ? 0 : Integer.parseInt(res);
 
-        if (flag) {
-            // get key     看库存数量够不够
-            String res = stringRedisTemplate.opsForValue().get("goods:001");
-            int goodsNumber = res == null ? 0 : Integer.parseInt(res);
+                if (goodsNumber > 0) {
+                    int remaining = goodsNumber - 1;
+                    stringRedisTemplate.opsForValue().set("goods:001", String.valueOf(remaining));
+                    System.out.println("成功买到商品, 库存剩余: " + remaining + "      serverPort: " + serverPort);
+                    return "成功买到商品, 库存剩余: " + remaining + "      serverPort: " + serverPort;
+                }
+                System.out.println("------------------- [failed]");
 
-            if (goodsNumber > 0) {
-                int remaining = goodsNumber - 1;
-                stringRedisTemplate.opsForValue().set("goods:001", String.valueOf(remaining));
-                System.out.println("成功买到商品, 库存剩余: " + remaining + "      serverPort: " + serverPort);
-                stringRedisTemplate.delete(REDIS_LOCK);
-                return "成功买到商品, 库存剩余: " + remaining + "      serverPort: " + serverPort;
+                return "failed";
+            } else {
+                System.out.println(serverPort + "抢锁失败");
+                return "抢锁失败";
             }
-            System.out.println("------------------- [failed]");
+        } finally {
+            // unlock
             stringRedisTemplate.delete(REDIS_LOCK);
-            return "failed";
-        } else {
-            System.out.println(serverPort + "抢锁失败" );
-            return "抢锁失败";
         }
     }
 }
