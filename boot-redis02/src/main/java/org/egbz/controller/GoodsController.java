@@ -1,6 +1,8 @@
 package org.egbz.controller;
 
 import org.egbz.until.RedisUtils;
+import org.redisson.Redisson;
+import org.redisson.api.RLock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -26,14 +28,16 @@ public class GoodsController {
     @Value("${server.port}")
     private String serverPort;
 
+    @Autowired
+    private Redisson redisson;
+
     @GetMapping("/buyGoods")
     public String buyGoods() throws Exception {
         String value = UUID.randomUUID() + Thread.currentThread().getName();
-        try {
-            // 加锁 加过期时间,  此操作具备原子性
-            Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(REDIS_LOCK, value, 10L, TimeUnit.SECONDS); //setNX
 
-            if (flag) {
+        RLock rLock = redisson.getLock(REDIS_LOCK);
+        rLock.lock();
+        try {
                 // get key     看库存数量够不够
                 String res = stringRedisTemplate.opsForValue().get("goods:001");
                 int goodsNumber = res == null ? 0 : Integer.parseInt(res);
@@ -45,32 +49,31 @@ public class GoodsController {
                     return "成功买到商品, 库存剩余: " + remaining + "      serverPort: " + serverPort;
                 }
                 System.out.println("------------------- [failed]");
-
                 return "failed";
-            } else {
-                System.out.println(serverPort + "抢锁失败");
-                return "抢锁失败";
-            }
         } finally {
-            // 解锁. 使用lua脚本的版本(推荐)
-            Jedis jedis = RedisUtils.getJedis();
-            String script = "if redis.call(\"get\",KEYS[1]) == ARGV[1] then\n" +
-                    "    return redis.call(\"del\",KEYS[1])\n" +
-                    "else\n" +
-                    "    return 0\n" +
-                    "end";
-            try {
-                Object o = jedis.eval(script, Collections.singletonList(REDIS_LOCK), Collections.singletonList(value));
-                if ("1".equals(o.toString())) {
-                    System.out.println("------del redis lock success");
-                } else {
-                    System.out.println("------del redis lock failed");
-                }
-            } finally {
-                if (null != jedis) {
-                    jedis.close();
-                }
-            }
+            rLock.unlock();
+
+
+
+//            // 解锁. 使用lua脚本的版本(推荐)
+//            Jedis jedis = RedisUtils.getJedis();
+//            String script = "if redis.call(\"get\",KEYS[1]) == ARGV[1] then\n" +
+//                    "    return redis.call(\"del\",KEYS[1])\n" +
+//                    "else\n" +
+//                    "    return 0\n" +
+//                    "end";
+//            try {
+//                Object o = jedis.eval(script, Collections.singletonList(REDIS_LOCK), Collections.singletonList(value));
+//                if ("1".equals(o.toString())) {
+//                    System.out.println("------del redis lock success");
+//                } else {
+//                    System.out.println("------del redis lock failed");
+//                }
+//            } finally {
+//                if (null != jedis) {
+//                    jedis.close();
+//                }
+//            }
         }
     }
 
