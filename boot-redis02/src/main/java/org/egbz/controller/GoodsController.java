@@ -1,11 +1,14 @@
 package org.egbz.controller;
 
+import org.egbz.until.RedisUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import redis.clients.jedis.Jedis;
 
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -24,7 +27,7 @@ public class GoodsController {
     private String serverPort;
 
     @GetMapping("/buyGoods")
-    public String buyGoods() {
+    public String buyGoods() throws Exception {
         String value = UUID.randomUUID() + Thread.currentThread().getName();
         try {
             // 加锁 加过期时间,  此操作具备原子性
@@ -49,9 +52,24 @@ public class GoodsController {
                 return "抢锁失败";
             }
         } finally {
-            // 解锁.  且确保删除的是自己的锁
-            if (stringRedisTemplate.opsForValue().get(REDIS_LOCK).equalsIgnoreCase(value)) {
-                stringRedisTemplate.delete(REDIS_LOCK);
+            // 解锁. 使用lua脚本的版本(推荐)
+            Jedis jedis = RedisUtils.getJedis();
+            String script = "if redis.call(\"get\",KEYS[1]) == ARGV[1] then\n" +
+                    "    return redis.call(\"del\",KEYS[1])\n" +
+                    "else\n" +
+                    "    return 0\n" +
+                    "end";
+            try {
+                Object o = jedis.eval(script, Collections.singletonList(REDIS_LOCK), Collections.singletonList(value));
+                if ("1".equals(o.toString())) {
+                    System.out.println("------del redis lock success");
+                } else {
+                    System.out.println("------del redis lock failed");
+                }
+            } finally {
+                if (null != jedis) {
+                    jedis.close();
+                }
             }
         }
     }

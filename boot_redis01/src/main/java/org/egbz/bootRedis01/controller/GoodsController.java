@@ -50,7 +50,7 @@ public class GoodsController {
                 return "抢锁失败";
             }
         } finally {
-            // 解锁. 不使用lua脚本, 使用redis事务的版本
+            // 解锁. 使用redis事务的版本
             for (;;) {
                 stringRedisTemplate.watch(REDIS_LOCK);
                 if (stringRedisTemplate.opsForValue().get(REDIS_LOCK).equalsIgnoreCase(value)) {
