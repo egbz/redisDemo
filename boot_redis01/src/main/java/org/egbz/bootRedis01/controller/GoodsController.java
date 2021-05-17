@@ -49,8 +49,10 @@ public class GoodsController {
                 return "抢锁失败";
             }
         } finally {
-            // unlock
-            stringRedisTemplate.delete(REDIS_LOCK);
+            // 解锁.  且确保删除的是自己的锁
+            if (stringRedisTemplate.opsForValue().get(REDIS_LOCK).equalsIgnoreCase(value)) {
+                stringRedisTemplate.delete(REDIS_LOCK);
+            }
         }
     }
 }
