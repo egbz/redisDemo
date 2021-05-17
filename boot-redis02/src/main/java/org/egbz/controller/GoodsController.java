@@ -51,7 +51,9 @@ public class GoodsController {
                 System.out.println("------------------- [failed]");
                 return "failed";
         } finally {
-            rLock.unlock();
+            if (rLock.isLocked() && rLock.isHeldByCurrentThread()) {
+                    rLock.unlock();
+            }
 
 
 
