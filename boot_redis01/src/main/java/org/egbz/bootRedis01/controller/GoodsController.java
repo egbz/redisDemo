@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -49,10 +50,22 @@ public class GoodsController {
                 return "抢锁失败";
             }
         } finally {
-            // 解锁.  且确保删除的是自己的锁
-            if (stringRedisTemplate.opsForValue().get(REDIS_LOCK).equalsIgnoreCase(value)) {
-                stringRedisTemplate.delete(REDIS_LOCK);
+            // 解锁. 不使用lua脚本, 使用redis事务的版本
+            for (;;) {
+                stringRedisTemplate.watch(REDIS_LOCK);
+                if (stringRedisTemplate.opsForValue().get(REDIS_LOCK).equalsIgnoreCase(value)) {
+                    stringRedisTemplate.setEnableTransactionSupport(true);
+                    stringRedisTemplate.multi();
+                    stringRedisTemplate.delete(REDIS_LOCK);
+                    List<Object> list = stringRedisTemplate.exec();
+                    if (list == null) {
+                        continue;
+                    }
+                }
+                stringRedisTemplate.unwatch();
+                break;
             }
+
         }
     }
 }
