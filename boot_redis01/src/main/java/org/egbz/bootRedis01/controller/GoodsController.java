@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author egbz
@@ -26,8 +27,9 @@ public class GoodsController {
     public String buyGoods() {
         String value = UUID.randomUUID() + Thread.currentThread().getName();
         try {
-            // lock
-            Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(REDIS_LOCK, value); //setNX
+            // 加锁 加过期时间,  此操作具备原子性
+            Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(REDIS_LOCK, value, 10L, TimeUnit.SECONDS); //setNX
+
             if (flag) {
                 // get key     看库存数量够不够
                 String res = stringRedisTemplate.opsForValue().get("goods:001");
